@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 use strum::VariantArray;
 
-static DB: LazyLock<HashMap<TrainingGoal, Routines>> = LazyLock::new(|| {
+static ROUTINES_DB: LazyLock<HashMap<TrainingGoal, Routines>> = LazyLock::new(|| {
     let strength_routines = Routines {
         routines: vec![Routine {
             id: "str001".to_owned(),
@@ -76,8 +76,8 @@ pub struct Goals {
     goals: Vec<TrainingGoal>,
 }
 
-pub async fn get_routines() -> Json<HashMap<TrainingGoal, Routines>> {
-    Json(DB.clone())
+pub async fn get_routines_by_goal() -> Json<HashMap<TrainingGoal, Routines>> {
+    Json(ROUTINES_DB.clone())
 }
 
 pub async fn get_goals() -> Json<Goals> {

@@ -16,7 +16,7 @@ fn app() -> Router {
     Router::new().route("/", get(handle_index)).nest(
         "/api/v1",
         Router::new()
-            .route("/routines", get(api::get_routines))
+            .route("/routines-by-goal", get(api::get_routines_by_goal))
             .route("/goals", get(api::get_goals)),
     )
 }
