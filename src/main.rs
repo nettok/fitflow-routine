@@ -15,7 +15,9 @@ async fn main() {
 fn app() -> Router {
     Router::new().route("/", get(handle_index)).nest(
         "/api/v1",
-        Router::new().route("/routines", get(api::get_routines)),
+        Router::new()
+            .route("/routines", get(api::get_routines))
+            .route("/goals", get(api::get_goals)),
     )
 }
 

@@ -4,6 +4,7 @@ use axum::Json;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::LazyLock;
+use strum::VariantArray;
 
 static DB: LazyLock<HashMap<TrainingGoal, Routines>> = LazyLock::new(|| {
     let strength_routines = Routines {
@@ -25,7 +26,7 @@ static DB: LazyLock<HashMap<TrainingGoal, Routines>> = LazyLock::new(|| {
     routines
 });
 
-#[derive(Clone, Eq, PartialEq, Hash, Serialize)]
+#[derive(Clone, Eq, PartialEq, Hash, Serialize, VariantArray)]
 pub enum TrainingGoal {
     Strength,
     Hypertrophy,
@@ -70,6 +71,17 @@ pub enum Load {
     High,
 }
 
+#[derive(Clone, Serialize)]
+pub struct Goals {
+    goals: Vec<TrainingGoal>,
+}
+
 pub async fn get_routines() -> Json<HashMap<TrainingGoal, Routines>> {
     Json(DB.clone())
+}
+
+pub async fn get_goals() -> Json<Goals> {
+    Json(Goals {
+        goals: TrainingGoal::VARIANTS.to_vec(),
+    })
 }

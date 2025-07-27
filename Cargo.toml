@@ -8,3 +8,4 @@ authors = ["Ernesto Menéndez <pyalec@gmail.com>"]
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
+strum = {  version = "0.27", features = ["derive"] }
