@@ -26,15 +26,15 @@ fn app() -> Router {
                 get(api::assignments::get_user_assignments),
             )
             .route(
-                "/assignments/{user_id}/accept/{route_id}",
+                "/assignments/{user_id}/accept/{routine_id}",
                 put(api::assignments::assignment_accept),
             )
             .route(
-                "/assignments/{user_id}/start/{route_id}",
+                "/assignments/{user_id}/start/{routine_id}",
                 put(api::assignments::assignment_start),
             )
             .route(
-                "/assignments/{user_id}/complete/{route_id}",
+                "/assignments/{user_id}/complete/{routine_id}",
                 put(api::assignments::assignment_complete),
             ),
     )
