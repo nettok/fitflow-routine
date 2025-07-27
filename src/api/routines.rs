@@ -1,10 +1,10 @@
+use crate::api::routines::Intensity::Set;
+use crate::api::routines::TrainingGoal::Strength;
 use axum::Json;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 use strum::VariantArray;
-use crate::api::routines::Intensity::Set;
-use crate::api::routines::TrainingGoal::Strength;
 
 static ROUTINES_DB: LazyLock<HashMap<TrainingGoal, Routines>> = LazyLock::new(|| {
     let strength_routines = Routines {
