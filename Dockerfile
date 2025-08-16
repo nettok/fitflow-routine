@@ -17,4 +17,5 @@ RUN cargo build --release --bin routine
 FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 COPY --from=builder /app/target/release/routine /usr/local/bin
+COPY --from=builder /app/config /usr/local/bin/config
 ENTRYPOINT ["/usr/local/bin/routine"]
