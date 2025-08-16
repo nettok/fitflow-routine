@@ -24,8 +24,8 @@ pub fn load_app_config<'de, T: Clone + Deserialize<'de>>() -> Result<T, BoxError
         .to_string();
 
     let conf = Config::builder()
-        .add_source(config::File::with_name("config/default"))
-        .add_source(config::File::with_name(&format!("config/{}", profile)).required(false))
+        // .add_source(config::File::with_name("config/default"))
+        // .add_source(config::File::with_name(&format!("config/{}", profile)).required(false))
         .add_source(config::Environment::default())
         .build()?;
 
