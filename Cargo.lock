@@ -1019,6 +1019,7 @@ dependencies = [
  "dotenvy",
  "redis",
  "serde",
+ "serde_json",
  "strum",
  "tokio",
  "tracing",

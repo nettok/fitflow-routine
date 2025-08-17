@@ -1,14 +1,14 @@
 mod api;
 mod config;
+mod events;
+mod redis_pool;
 
 use crate::config::load_app_config;
+use crate::redis_pool::RedisPool;
 use axum::response::Html;
 use axum::routing::{get, put};
 use axum::{BoxError, Router};
-use bb8::Pool;
-use bb8_redis::RedisConnectionManager;
 use dotenvy::dotenv;
-use redis::AsyncCommands;
 use serde::Deserialize;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -39,8 +39,10 @@ async fn main() -> Result<(), BoxError> {
 
     let state = AppState {
         config,
-        redis_pool: create_redis_pool(&shared_config.redis_url).await,
+        redis_pool: redis_pool::new_redis_pool(&shared_config.redis_url).await,
     };
+
+    events::handle_events(state.redis_pool.clone());
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
 
@@ -82,22 +84,4 @@ fn app(state: AppState) -> Router {
 
 async fn handle_index() -> Html<&'static str> {
     Html("OK")
-}
-
-type RedisPool = Pool<RedisConnectionManager>;
-
-async fn create_redis_pool(redis_url: &str) -> RedisPool {
-    tracing::info!("connecting to redis");
-    let manager = RedisConnectionManager::new(redis_url).unwrap();
-    let pool = bb8::Pool::builder().build(manager).await.unwrap();
-    {
-        // ping the database before starting
-        let mut conn = pool.get().await.unwrap();
-        conn.set::<&str, &str, ()>("foo", "bar").await.unwrap();
-        let result: String = conn.get("foo").await.unwrap();
-        assert_eq!(result, "bar");
-        conn.del::<&str, usize>("foo").await.unwrap();
-    }
-    tracing::info!("successfully connected to redis and pinged it");
-    pool
 }
