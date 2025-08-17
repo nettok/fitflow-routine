@@ -3,7 +3,7 @@ mod config;
 mod events;
 mod redis_pool;
 
-use crate::config::load_app_config;
+use crate::config::{load_app_config, RunProfile};
 use crate::redis_pool::RedisPool;
 use axum::response::Html;
 use axum::routing::{get, put};
@@ -14,6 +14,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Clone, Deserialize)]
 struct AppConfig {
+    run_profile: RunProfile,
+    sentry_dns: String,
     redis_url: String,
 }
 
@@ -23,12 +25,41 @@ struct AppState {
     redis_pool: RedisPool,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), BoxError> {
+fn main() -> Result<(), BoxError> {
     dotenv().ok();
     let config = load_app_config::<AppConfig>()?;
     let shared_config = config.clone();
 
+    let _guard = sentry::init((shared_config.sentry_dns, sentry::ClientOptions {
+        release: sentry::release_name!(),
+        send_default_pii: true,
+        environment: Some(shared_config.run_profile.to_string().into()),
+        ..Default::default()
+    }));
+
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async {
+            init_tracing();
+
+            let state = AppState {
+                config,
+                redis_pool: redis_pool::new_redis_pool(&shared_config.redis_url).await,
+            };
+
+            events::handle_events(state.redis_pool.clone());
+
+            let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
+
+            println!("listening on {}", listener.local_addr().unwrap());
+            axum::serve(listener, app(state)).await.unwrap();
+        });
+    Ok(())
+}
+
+fn init_tracing() {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -36,19 +67,6 @@ async fn main() -> Result<(), BoxError> {
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
-
-    let state = AppState {
-        config,
-        redis_pool: redis_pool::new_redis_pool(&shared_config.redis_url).await,
-    };
-
-    events::handle_events(state.redis_pool.clone());
-
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
-
-    println!("listening on {}", listener.local_addr().unwrap());
-    axum::serve(listener, app(state)).await.unwrap();
-    Ok(())
 }
 
 fn app(state: AppState) -> Router {

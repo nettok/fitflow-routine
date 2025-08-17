@@ -4,8 +4,9 @@ use serde::Deserialize;
 use std::str::FromStr;
 use strum::{Display, EnumString};
 
-#[derive(Clone, Display, EnumString)]
-enum RunProfile {
+#[derive(Clone, Display, EnumString, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RunProfile {
     #[strum(serialize = "dev")]
     Dev,
 
