@@ -3,7 +3,7 @@ mod config;
 mod events;
 mod redis_pool;
 
-use crate::config::{load_app_config, RunProfile};
+use crate::config::{RunProfile, load_app_config};
 use crate::redis_pool::RedisPool;
 use axum::response::Html;
 use axum::routing::{get, put};
@@ -15,7 +15,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 #[derive(Clone, Deserialize)]
 struct AppConfig {
     run_profile: RunProfile,
-    sentry_dns: String,
+    sentry_dsn: String,
     redis_url: String,
 }
 
@@ -30,12 +30,15 @@ fn main() -> Result<(), BoxError> {
     let config = load_app_config::<AppConfig>()?;
     let shared_config = config.clone();
 
-    let _guard = sentry::init((shared_config.sentry_dns, sentry::ClientOptions {
-        release: sentry::release_name!(),
-        send_default_pii: true,
-        environment: Some(shared_config.run_profile.to_string().into()),
-        ..Default::default()
-    }));
+    let _guard = sentry::init((
+        shared_config.sentry_dsn,
+        sentry::ClientOptions {
+            release: sentry::release_name!(),
+            send_default_pii: true,
+            environment: Some(shared_config.run_profile.to_string().into()),
+            ..Default::default()
+        },
+    ));
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
