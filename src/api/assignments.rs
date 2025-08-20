@@ -12,31 +12,32 @@ static ASSIGNMENTS_DB: LazyLock<Mutex<HashMap<UserId, HashMap<RoutineId, Assignm
 type UserId = String;
 type RoutineId = String;
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Assignment {
     user_id: UserId,
     routine_id: RoutineId,
     status: Status,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub enum Status {
     Assigned,
     Started,
     Completed,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct PutAssignmentsParams {
     user_id: UserId,
     routine_id: RoutineId,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct UserAssignments {
     assignments: Vec<Assignment>,
 }
 
+#[tracing::instrument]
 pub async fn get_user_assignments(
     Path(user_id): Path<UserId>,
 ) -> Result<Json<UserAssignments>, StatusCode> {
@@ -54,6 +55,7 @@ pub async fn get_user_assignments(
     }))
 }
 
+#[tracing::instrument]
 pub async fn assignment_accept(Path(params): Path<PutAssignmentsParams>) -> NoContent {
     let mut db = ASSIGNMENTS_DB.lock().unwrap();
 
@@ -82,18 +84,21 @@ pub async fn assignment_accept(Path(params): Path<PutAssignmentsParams>) -> NoCo
     NoContent
 }
 
+#[tracing::instrument]
 pub async fn assignment_start(
     Path(params): Path<PutAssignmentsParams>,
 ) -> Result<NoContent, StatusCode> {
     update_assignment_status(&params, Status::Started).unwrap_or_else(|value| value)
 }
 
+#[tracing::instrument]
 pub async fn assignment_complete(
     Path(params): Path<PutAssignmentsParams>,
 ) -> Result<NoContent, StatusCode> {
     update_assignment_status(&params, Status::Completed).unwrap_or_else(|value| value)
 }
 
+#[tracing::instrument]
 fn update_assignment_status(
     params: &PutAssignmentsParams,
     new_status: Status,

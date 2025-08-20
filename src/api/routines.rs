@@ -76,10 +76,12 @@ pub struct Goals {
     goals: Vec<TrainingGoal>,
 }
 
+#[tracing::instrument]
 pub async fn get_routines_by_goal() -> Json<HashMap<TrainingGoal, Routines>> {
     Json(ROUTINES_DB.clone())
 }
 
+#[tracing::instrument]
 pub async fn get_goals() -> Json<Goals> {
     Json(Goals {
         goals: TrainingGoal::VARIANTS.to_vec(),

@@ -30,11 +30,21 @@ fn main() -> Result<(), BoxError> {
     let config = load_app_config::<AppConfig>()?;
     let shared_config = config.clone();
 
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| format!("{}=debug", env!("CARGO_CRATE_NAME")).into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .with(sentry::integrations::tracing::layer())
+        .init();
+
     let _guard = if let Some(sentry_dsn) = shared_config.sentry_dsn {
         Some(sentry::init((
             sentry_dsn,
             sentry::ClientOptions {
                 release: sentry::release_name!(),
+                traces_sample_rate: 1.0f32,
                 send_default_pii: true,
                 environment: Some(shared_config.run_profile.to_string().into()),
                 ..Default::default()
@@ -49,8 +59,6 @@ fn main() -> Result<(), BoxError> {
         .build()
         .unwrap()
         .block_on(async {
-            init_tracing();
-
             let state = AppState {
                 config,
                 redis_pool: redis_pool::new_redis_pool(&shared_config.redis_url).await,
@@ -64,16 +72,6 @@ fn main() -> Result<(), BoxError> {
             axum::serve(listener, app(state)).await.unwrap();
         });
     Ok(())
-}
-
-fn init_tracing() {
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| format!("{}=debug", env!("CARGO_CRATE_NAME")).into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
 }
 
 fn app(state: AppState) -> Router {
@@ -107,6 +105,7 @@ fn app(state: AppState) -> Router {
         .with_state(state)
 }
 
+#[tracing::instrument]
 async fn handle_index() -> Html<&'static str> {
     Html("OK")
 }
