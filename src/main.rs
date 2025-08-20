@@ -15,7 +15,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 #[derive(Clone, Deserialize)]
 struct AppConfig {
     run_profile: RunProfile,
-    sentry_dsn: String,
+    sentry_dsn: Option<String>,
     redis_url: String,
 }
 
@@ -30,15 +30,19 @@ fn main() -> Result<(), BoxError> {
     let config = load_app_config::<AppConfig>()?;
     let shared_config = config.clone();
 
-    let _guard = sentry::init((
-        shared_config.sentry_dsn,
-        sentry::ClientOptions {
-            release: sentry::release_name!(),
-            send_default_pii: true,
-            environment: Some(shared_config.run_profile.to_string().into()),
-            ..Default::default()
-        },
-    ));
+    let _guard = if let Some(sentry_dsn) = shared_config.sentry_dsn {
+        Some(sentry::init((
+            sentry_dsn,
+            sentry::ClientOptions {
+                release: sentry::release_name!(),
+                send_default_pii: true,
+                environment: Some(shared_config.run_profile.to_string().into()),
+                ..Default::default()
+            },
+        )))
+    } else {
+        None
+    };
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
