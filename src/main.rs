@@ -15,7 +15,7 @@ use sentry::integrations::tower::{NewSentryLayer, SentryHttpLayer};
 use serde::Deserialize;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 struct AppConfig {
     run_profile: RunProfile,
     sentry_dsn: Option<String>,
@@ -41,6 +41,8 @@ fn main() -> Result<(), BoxError> {
         .with(tracing_subscriber::fmt::layer())
         .with(sentry::integrations::tracing::layer())
         .init();
+
+    println!("{:?}", config);
 
     let _guard = if let Some(sentry_dsn) = shared_config.sentry_dsn {
         Some(sentry::init((

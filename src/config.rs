@@ -1,10 +1,10 @@
 use axum::BoxError;
-use config::Config;
+use config::{Case, Config};
 use serde::Deserialize;
 use std::str::FromStr;
 use strum::{Display, EnumString};
 
-#[derive(Clone, Display, EnumString, Deserialize)]
+#[derive(Clone, Debug, Display, EnumString, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RunProfile {
     #[strum(serialize = "dev")]
@@ -27,7 +27,7 @@ pub fn load_app_config<'de, T: Clone + Deserialize<'de>>() -> Result<T, BoxError
     let conf = Config::builder()
         .add_source(config::File::with_name("config/default"))
         .add_source(config::File::with_name(&format!("config/{}", profile)).required(false))
-        .add_source(config::Environment::default())
+        .add_source(config::Environment::default().convert_case(Case::Snake))
         .build()?;
 
     conf.try_deserialize::<T>().map_err(|e| e.into())
