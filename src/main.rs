@@ -12,6 +12,7 @@ use axum::routing::{get, put};
 use axum::{BoxError, Router};
 use dotenvy::dotenv;
 use sentry::integrations::tower::{NewSentryLayer, SentryHttpLayer};
+use sentry::integrations::tracing::EventFilter;
 use serde::Deserialize;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -33,22 +34,14 @@ fn main() -> Result<(), BoxError> {
     let config = load_app_config::<AppConfig>()?;
     let shared_config = config.clone();
 
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| format!("{}=debug", env!("CARGO_CRATE_NAME")).into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .with(sentry::integrations::tracing::layer())
-        .init();
-
-    println!("{:?}", config);
+    init_tracing_with_sentry();
 
     let _guard = if let Some(sentry_dsn) = shared_config.sentry_dsn {
         Some(sentry::init((
             sentry_dsn,
             sentry::ClientOptions {
                 release: sentry::release_name!(),
+                enable_logs: true,
                 traces_sample_rate: 1.0f32,
                 send_default_pii: true,
                 environment: Some(shared_config.run_profile.to_string().into()),
@@ -77,6 +70,28 @@ fn main() -> Result<(), BoxError> {
             axum::serve(listener, app(state)).await.unwrap();
         });
     Ok(())
+}
+
+fn init_tracing_with_sentry() {
+    let sentry_layer =
+        sentry::integrations::tracing::layer().event_filter(|md| match *md.level() {
+            // Capture error level events as Sentry events
+            // These are grouped into issues, representing high-severity errors to act upon
+            tracing::Level::ERROR => EventFilter::Event,
+            // Ignore trace level events, as they're too verbose
+            tracing::Level::TRACE => EventFilter::Ignore,
+            // Capture everything else as a traditional structured log
+            _ => EventFilter::Log,
+        });
+
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| format!("{}=debug", env!("CARGO_CRATE_NAME")).into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .with(sentry_layer)
+        .init();
 }
 
 fn app(state: AppState) -> Router {
