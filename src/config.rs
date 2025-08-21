@@ -6,11 +6,9 @@ use strum::{Display, EnumString};
 
 #[derive(Clone, Debug, Display, EnumString, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum RunProfile {
-    #[strum(serialize = "dev")]
     Dev,
-
-    #[strum(serialize = "prod")]
     Prod,
 }
 

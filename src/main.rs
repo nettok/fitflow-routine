@@ -5,11 +5,11 @@ mod redis_pool;
 
 use crate::config::{RunProfile, load_app_config};
 use crate::redis_pool::RedisPool;
+use axum::body::Body;
+use axum::http::Request;
 use axum::response::Html;
 use axum::routing::{get, put};
 use axum::{BoxError, Router};
-use axum::body::Body;
-use axum::http::Request;
 use dotenvy::dotenv;
 use sentry::integrations::tower::{NewSentryLayer, SentryHttpLayer};
 use serde::Deserialize;

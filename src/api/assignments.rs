@@ -1,13 +1,14 @@
+use crate::AppState;
 use axum::Json;
-use axum::extract::Path;
+use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::NoContent;
+use redis::AsyncTypedCommands;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex};
+use std::str::FromStr;
+use strum::{Display, EnumString};
 
-static ASSIGNMENTS_DB: LazyLock<Mutex<HashMap<UserId, HashMap<RoutineId, Assignment>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+const DB_KEY_PREFIX: &str = "user-assignments:";
 
 type UserId = String;
 type RoutineId = String;
@@ -19,7 +20,8 @@ pub struct Assignment {
     status: Status,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Display, EnumString, Serialize)]
+#[strum(serialize_all = "snake_case")]
 pub enum Status {
     Assigned,
     Started,
@@ -37,90 +39,75 @@ pub struct UserAssignments {
     assignments: Vec<Assignment>,
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(state))]
 pub async fn get_user_assignments(
+    State(state): State<AppState>,
     Path(user_id): Path<UserId>,
 ) -> Result<Json<UserAssignments>, StatusCode> {
-    let db = ASSIGNMENTS_DB.lock().unwrap();
+    let routine_status_map = state
+        .redis_pool
+        .get()
+        .await
+        .unwrap()
+        .hgetall(DB_KEY_PREFIX.to_owned() + &*user_id)
+        .await
+        .unwrap();
 
-    let maybe_assigned_routines = db.get(&user_id);
-    if maybe_assigned_routines.is_none() {
-        return Err(StatusCode::NOT_FOUND);
-    }
-
-    let assigned_routines = maybe_assigned_routines.unwrap().values().cloned().collect();
+    let assigned_routines = routine_status_map
+        .iter()
+        .map(|(routine_id, status)| Assignment {
+            user_id: user_id.to_owned(),
+            routine_id: routine_id.to_owned(),
+            status: Status::from_str(status).unwrap(),
+        })
+        .collect();
 
     Ok(Json(UserAssignments {
         assignments: assigned_routines,
     }))
 }
 
-#[tracing::instrument]
-pub async fn assignment_accept(Path(params): Path<PutAssignmentsParams>) -> NoContent {
-    let mut db = ASSIGNMENTS_DB.lock().unwrap();
-
-    if let Some(assigned_routines) = db.get_mut(&params.user_id) {
-        assigned_routines.insert(
-            params.routine_id.clone(),
-            Assignment {
-                user_id: params.user_id,
-                routine_id: params.routine_id,
-                status: Status::Assigned,
-            },
-        );
-    } else {
-        let mut assigned_routines = HashMap::new();
-        assigned_routines.insert(
-            params.routine_id.clone(),
-            Assignment {
-                user_id: params.user_id.clone(),
-                routine_id: params.routine_id,
-                status: Status::Assigned,
-            },
-        );
-        db.insert(params.user_id, assigned_routines);
-    }
-
-    NoContent
+#[tracing::instrument(skip(state))]
+pub async fn assignment_accept(
+    State(state): State<AppState>,
+    Path(params): Path<PutAssignmentsParams>,
+) -> Result<NoContent, StatusCode> {
+    update_assignment_status(state, &params, Status::Assigned).await
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(state))]
 pub async fn assignment_start(
+    State(state): State<AppState>,
     Path(params): Path<PutAssignmentsParams>,
 ) -> Result<NoContent, StatusCode> {
-    update_assignment_status(&params, Status::Started).unwrap_or_else(|value| value)
+    update_assignment_status(state, &params, Status::Started).await
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(state))]
 pub async fn assignment_complete(
+    State(state): State<AppState>,
     Path(params): Path<PutAssignmentsParams>,
 ) -> Result<NoContent, StatusCode> {
-    update_assignment_status(&params, Status::Completed).unwrap_or_else(|value| value)
+    update_assignment_status(state, &params, Status::Completed).await
 }
 
-#[tracing::instrument]
-fn update_assignment_status(
+async fn update_assignment_status(
+    state: AppState,
     params: &PutAssignmentsParams,
     new_status: Status,
-) -> Result<Result<NoContent, StatusCode>, Result<NoContent, StatusCode>> {
-    let mut db = ASSIGNMENTS_DB.lock().unwrap();
+) -> Result<NoContent, StatusCode> {
+    let user_id = &params.user_id;
+    let routine_id = &params.routine_id;
+    let status = new_status.to_string();
 
-    if let Some(assigned_routines) = db.get_mut(&params.user_id) {
-        if let Some(assignment) = assigned_routines.get_mut(&params.routine_id) {
-            let assignment = assignment.clone();
-            assigned_routines.insert(
-                params.routine_id.clone(),
-                Assignment {
-                    status: new_status,
-                    ..assignment
-                },
-            );
-        } else {
-            return Err(Err(StatusCode::NOT_FOUND));
-        }
-    } else {
-        return Err(Err(StatusCode::NOT_FOUND));
-    }
+    state
+        .redis_pool
+        .get()
+        .await
+        .unwrap()
+        .hset(DB_KEY_PREFIX.to_owned() + &*user_id, routine_id, status)
+        .await
+        .unwrap();
 
-    Ok(Ok(NoContent))
+    Ok(NoContent)
 }
