@@ -1,7 +1,7 @@
 use crate::AppState;
+use crate::errors::AppError;
 use axum::Json;
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
 use axum::response::NoContent;
 use redis::AsyncTypedCommands;
 use serde::{Deserialize, Serialize};
@@ -43,15 +43,13 @@ pub struct UserAssignments {
 pub async fn get_user_assignments(
     State(state): State<AppState>,
     Path(user_id): Path<UserId>,
-) -> Result<Json<UserAssignments>, StatusCode> {
+) -> Result<Json<UserAssignments>, AppError> {
     let routine_status_map = state
         .redis_pool
         .get()
-        .await
-        .unwrap()
+        .await?
         .hgetall(DB_KEY_PREFIX.to_owned() + &*user_id)
-        .await
-        .unwrap();
+        .await?;
 
     let assigned_routines = routine_status_map
         .iter()
@@ -71,7 +69,7 @@ pub async fn get_user_assignments(
 pub async fn assignment_accept(
     State(state): State<AppState>,
     Path(params): Path<PutAssignmentsParams>,
-) -> Result<NoContent, StatusCode> {
+) -> Result<NoContent, AppError> {
     update_assignment_status(state, &params, Status::Assigned).await
 }
 
@@ -79,7 +77,7 @@ pub async fn assignment_accept(
 pub async fn assignment_start(
     State(state): State<AppState>,
     Path(params): Path<PutAssignmentsParams>,
-) -> Result<NoContent, StatusCode> {
+) -> Result<NoContent, AppError> {
     update_assignment_status(state, &params, Status::Started).await
 }
 
@@ -87,7 +85,7 @@ pub async fn assignment_start(
 pub async fn assignment_complete(
     State(state): State<AppState>,
     Path(params): Path<PutAssignmentsParams>,
-) -> Result<NoContent, StatusCode> {
+) -> Result<NoContent, AppError> {
     update_assignment_status(state, &params, Status::Completed).await
 }
 
@@ -95,7 +93,7 @@ async fn update_assignment_status(
     state: AppState,
     params: &PutAssignmentsParams,
     new_status: Status,
-) -> Result<NoContent, StatusCode> {
+) -> Result<NoContent, AppError> {
     let user_id = &params.user_id;
     let routine_id = &params.routine_id;
     let status = new_status.to_string();
@@ -103,11 +101,9 @@ async fn update_assignment_status(
     state
         .redis_pool
         .get()
-        .await
-        .unwrap()
+        .await?
         .hset(DB_KEY_PREFIX.to_owned() + &*user_id, routine_id, status)
-        .await
-        .unwrap();
+        .await?;
 
     Ok(NoContent)
 }

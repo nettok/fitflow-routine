@@ -1,3 +1,5 @@
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, NoContent, Response};
 use bb8::RunError;
 use thiserror::Error;
 
@@ -11,4 +13,11 @@ pub enum AppError {
 
     #[error("Redis pool error: {0}")]
     RedisError(#[from] redis::RedisError),
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        tracing::error!("{}", self);
+        (StatusCode::INTERNAL_SERVER_ERROR, NoContent).into_response()
+    }
 }
