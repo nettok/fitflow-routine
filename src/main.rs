@@ -60,14 +60,16 @@ fn main() -> Result<(), BoxError> {
         .block_on(async {
             let state = AppState {
                 config,
-                redis_pool: redis_pool::new_redis_pool(&shared_config.redis_url).await,
+                redis_pool: redis_pool::new_redis_pool(&shared_config.redis_url)
+                    .await
+                    .unwrap(),
             };
 
             events::handle_events(state.redis_pool.clone());
 
             let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
 
-            println!("listening on {}", listener.local_addr().unwrap());
+            tracing::info!("listening on {}", listener.local_addr().unwrap());
             axum::serve(listener, app(state)).await.unwrap();
         });
     Ok(())
