@@ -1,5 +1,6 @@
 mod api;
 mod config;
+mod errors;
 mod events;
 mod redis_pool;
 
