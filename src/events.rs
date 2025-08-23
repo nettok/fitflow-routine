@@ -30,17 +30,10 @@ pub fn handle_events(redis_pool: RedisPool) {
 
             let result = tokio::spawn(event_processing_loop(redis_pool.clone())).await;
 
-            match result {
-                Ok(()) => {
-                    tracing::warn!("Event processing loop completed normally, restarting...");
-                }
-                Err(join_error) => {
-                    if join_error.is_panic() {
-                        tracing::error!("Event processing loop panicked: {:?}", join_error);
-                    } else {
-                        tracing::error!("Event processing loop was cancelled: {:?}", join_error);
-                    }
-                }
+            if let Err(join_error) = result {
+                tracing::error!("Event processing loop unknown error: {:?}", join_error);
+            } else if let Ok(Err(app_error)) = result {
+                tracing::error!("Event processing loop error: {:?}", app_error);
             }
 
             restart_count += 1;
@@ -50,11 +43,11 @@ pub fn handle_events(redis_pool: RedisPool) {
     });
 }
 
-async fn event_processing_loop(redis_pool: RedisPool) {
-    let mut conn = redis_pool.get().await.unwrap();
+async fn event_processing_loop(redis_pool: RedisPool) -> Result<(), AppError> {
+    let mut conn = redis_pool.get().await?;
 
     loop {
-        if let Some(event) = conn.brpop("goal-set", 0f64).await.unwrap() {
+        if let Some(event) = conn.brpop("goal-set", 0f64).await? {
             let event_handler_redis_pool = redis_pool.clone();
             tokio::spawn(async move {
                 let _ = handle_goal_set_event(event_handler_redis_pool, event).await;
