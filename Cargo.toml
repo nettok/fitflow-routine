@@ -16,6 +16,7 @@ strum = {  version = "0.27", features = ["derive"] }
 dotenvy = "0.15"
 config = { version = "0.15", features = ["toml"] }
 thiserror = "2"
+anyhow = "1"
 bb8 = "0.9"
 bb8-redis = "0.24"
 redis = "0.32"

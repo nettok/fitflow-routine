@@ -19,6 +19,12 @@ struct ErrorData {
 
 #[derive(Debug, Error)]
 pub enum AppError {
+    #[error("{source}")]
+    Other {
+        location: &'static Location<'static>,
+        source: anyhow::Error,
+    },
+
     #[error("Serialization/Deserialization error: {source}")]
     SerDeError {
         location: &'static Location<'static>,
@@ -40,7 +46,14 @@ pub enum AppError {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        tracing::error!("{}", self);
+        let location = match self {
+            AppError::Other { location, .. } => location,
+            AppError::SerDeError { location, .. } => location,
+            AppError::RedisPoolError { location, .. } => location,
+            AppError::RedisError { location, .. } => location,
+        };
+
+        tracing::error!(location = location.to_string(), "{}", self);
 
         let span_id = sentry::Hub::current()
             .configure_scope(|scope| scope.get_span())
@@ -51,6 +64,16 @@ impl IntoResponse for AppError {
         };
 
         (StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)).into_response()
+    }
+}
+
+impl From<anyhow::Error> for AppError {
+    #[track_caller]
+    fn from(value: anyhow::Error) -> Self {
+        AppError::Other {
+            location: Location::caller(),
+            source: value,
+        }
     }
 }
 
