@@ -4,6 +4,7 @@ use axum::response::{IntoResponse, Response};
 use bb8::RunError;
 use sentry::protocol::SpanId;
 use serde::Serialize;
+use std::panic::Location;
 use thiserror::Error;
 
 #[derive(Debug, Serialize)]
@@ -18,14 +19,23 @@ struct ErrorData {
 
 #[derive(Debug, Error)]
 pub enum AppError {
-    #[error("Serialization/Deserialization error: {0}")]
-    SerDeError(#[from] serde_json::Error),
+    #[error("Serialization/Deserialization error: {source}")]
+    SerDeError {
+        location: &'static Location<'static>,
+        source: serde_json::Error,
+    },
 
-    #[error("Redis pool error: {0}")]
-    RedisPoolError(#[from] RunError<redis::RedisError>),
+    #[error("Redis pool error: {source}")]
+    RedisPoolError {
+        location: &'static Location<'static>,
+        source: RunError<redis::RedisError>,
+    },
 
-    #[error("Redis pool error: {0}")]
-    RedisError(#[from] redis::RedisError),
+    #[error("Redis pool error: {source}")]
+    RedisError {
+        location: &'static Location<'static>,
+        source: redis::RedisError,
+    },
 }
 
 impl IntoResponse for AppError {
@@ -41,5 +51,35 @@ impl IntoResponse for AppError {
         };
 
         (StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)).into_response()
+    }
+}
+
+impl From<serde_json::Error> for AppError {
+    #[track_caller]
+    fn from(value: serde_json::Error) -> Self {
+        AppError::SerDeError {
+            location: Location::caller(),
+            source: value,
+        }
+    }
+}
+
+impl From<RunError<redis::RedisError>> for AppError {
+    #[track_caller]
+    fn from(value: RunError<redis::RedisError>) -> Self {
+        AppError::RedisPoolError {
+            location: Location::caller(),
+            source: value,
+        }
+    }
+}
+
+impl From<redis::RedisError> for AppError {
+    #[track_caller]
+    fn from(value: redis::RedisError) -> Self {
+        AppError::RedisError {
+            location: Location::caller(),
+            source: value,
+        }
     }
 }
