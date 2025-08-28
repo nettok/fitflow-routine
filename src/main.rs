@@ -2,20 +2,22 @@ mod api;
 mod config;
 mod errors;
 mod events;
+mod metrics;
 mod redis_pool;
+mod sentry_tracing;
 
 use crate::config::{RunProfile, load_app_config};
+use crate::metrics::metrics_app;
 use crate::redis_pool::RedisPool;
+use crate::sentry_tracing::init_tracing_with_sentry;
 use axum::body::Body;
 use axum::http::Request;
 use axum::response::Html;
 use axum::routing::{get, put};
-use axum::{BoxError, Router};
+use axum::{BoxError, Router, middleware};
 use dotenvy::dotenv;
 use sentry::integrations::tower::{NewSentryLayer, SentryHttpLayer};
-use sentry::integrations::tracing::EventFilter;
 use serde::Deserialize;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Clone, Debug, Deserialize)]
 struct AppConfig {
@@ -67,37 +69,30 @@ fn main() -> Result<(), BoxError> {
 
             events::handle_events(state.redis_pool.clone());
 
-            let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
-
-            tracing::info!("listening on {}", listener.local_addr().unwrap());
-            axum::serve(listener, app(state)).await.unwrap();
+            tokio::join!(main_server(state), metrics_server())
         });
     Ok(())
 }
 
-fn init_tracing_with_sentry() {
-    let sentry_layer =
-        sentry::integrations::tracing::layer().event_filter(|md| match *md.level() {
-            // Capture error level events as Sentry events
-            // These are grouped into issues, representing high-severity errors to act upon
-            tracing::Level::ERROR => EventFilter::Event,
-            // Ignore trace level events, as they're too verbose
-            tracing::Level::TRACE => EventFilter::Ignore,
-            // Capture everything else as a traditional structured log
-            _ => EventFilter::Log,
-        });
-
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| format!("{}=debug", env!("CARGO_CRATE_NAME")).into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .with(sentry_layer)
-        .init();
+async fn main_server(state: AppState) {
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
+    tracing::info!(
+        "main server listening on {}",
+        listener.local_addr().unwrap()
+    );
+    axum::serve(listener, main_app(state)).await.unwrap();
 }
 
-fn app(state: AppState) -> Router {
+async fn metrics_server() {
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8081").await.unwrap();
+    tracing::info!(
+        "metrics server listening on {}",
+        listener.local_addr().unwrap()
+    );
+    axum::serve(listener, metrics_app()).await.unwrap();
+}
+
+fn main_app(state: AppState) -> Router {
     Router::new()
         .route("/", get(handle_index))
         .nest(
@@ -126,6 +121,7 @@ fn app(state: AppState) -> Router {
                 ),
         )
         .with_state(state)
+        .route_layer(middleware::from_fn(metrics::track_metrics))
         .layer(NewSentryLayer::<Request<Body>>::new_from_top())
         .layer(SentryHttpLayer::new().enable_transaction())
 }
