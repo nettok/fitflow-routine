@@ -95,6 +95,7 @@ async fn metrics_server() {
 fn main_app(state: AppState) -> Router {
     Router::new()
         .route("/", get(handle_index))
+        .route("/healthz", get(api::health::get_healthz))
         .nest(
             "/api/v1",
             Router::new()
