@@ -85,3 +85,12 @@ The application will be available at `http://localhost:8080` as with the local d
 ## License
 
 This project is licensed under the AGPL License. See the `LICENSE` file for details.
+
+## Observability
+See [observability documentation](docs/observability.md).
+
+## Resilience and Discoverability
+See [resilience and discoverability documentation](docs/resilience.md).
+
+## Security
+See [security documentation](docs/security.md).
